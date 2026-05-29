@@ -6,10 +6,17 @@
 <title>شركة الاماني - لوحة التحكم</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
-<div class="app-layout">
+
+<!-- Loading -->
+<div id="appLoader" style="position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:16px">
+  <div style="width:42px;height:42px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite"></div>
+  <div style="color:var(--text2);font-size:14px">جاري تحميل البيانات...</div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
+<div class="app-layout" id="appLayout" style="opacity:0;transition:opacity .4s">
 
   <!-- SIDEBAR -->
   <aside class="sidebar">
@@ -71,13 +78,15 @@
       <!-- HOME -->
       <section id="secHome" class="section active">
         <div class="stats-grid">
-          <div class="stat-card"><div class="stat-icon si-purple">🏢</div><div><div class="stat-value" id="stSup">0</div><div class="stat-label">إجمالي الموردين</div></div></div>
-          <div class="stat-card"><div class="stat-icon si-green">👥</div><div><div class="stat-value" id="stUsr">0</div><div class="stat-label">المستخدمون</div></div></div>
-          <div class="stat-card"><div class="stat-icon si-blue">📋</div><div><div class="stat-value" id="stSpec">0</div><div class="stat-label">التخصصات</div></div></div>
+          <div class="stat-card"><div class="stat-icon si-purple">🏢</div><div><div class="stat-value" id="stSup">-</div><div class="stat-label">إجمالي الموردين</div></div></div>
+          <div class="stat-card"><div class="stat-icon si-green">👥</div><div><div class="stat-value" id="stUsr">-</div><div class="stat-label">المستخدمون</div></div></div>
+          <div class="stat-card"><div class="stat-icon si-blue">📋</div><div><div class="stat-value" id="stSpec">-</div><div class="stat-label">التخصصات</div></div></div>
           <div class="stat-card"><div class="stat-icon si-orange">⭐</div><div><div class="stat-value" id="stAvg">-</div><div class="stat-label">متوسط التقييم</div></div></div>
         </div>
         <div class="sec-header"><h2>⭐ أعلى الموردين تقييماً</h2></div>
-        <div class="cards-grid" id="topGrid"></div>
+        <div class="cards-grid" id="topGrid">
+          <div class="empty"><div class="empty-ico">⏳</div><h3>جاري التحميل...</h3></div>
+        </div>
       </section>
 
       <!-- SUPPLIERS -->
@@ -99,10 +108,12 @@
             <option value="تاجر">تاجر</option>
           </select>
         </div>
-        <div class="cards-grid" id="supGrid"></div>
+        <div class="cards-grid" id="supGrid">
+          <div class="empty"><div class="empty-ico">⏳</div><h3>جاري التحميل...</h3></div>
+        </div>
       </section>
 
-      <!-- USERS (admin) -->
+      <!-- USERS -->
       <section id="secUsers" class="section">
         <div class="table-wrap">
           <table class="data-table">
@@ -112,7 +123,7 @@
         </div>
       </section>
 
-      <!-- SPECIALTIES (admin) -->
+      <!-- SPECIALTIES -->
       <section id="secSpecs" class="section">
         <div class="table-wrap">
           <table class="data-table">
@@ -126,7 +137,7 @@
   </main>
 </div>
 
-<!-- ═══ MODAL: ADD SUPPLIER ═══ -->
+<!-- ═══ MODAL: ADD/EDIT SUPPLIER ═══ -->
 <div class="modal-overlay" id="mSupplier">
   <div class="modal" style="max-width:640px">
     <div class="modal-header">
@@ -187,7 +198,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeM('mSupplier')">إلغاء</button>
-      <button class="btn btn-primary" onclick="saveSup()">💾 حفظ المورد</button>
+      <button class="btn btn-primary" id="saveSupBtn" onclick="saveSup()">💾 حفظ المورد</button>
     </div>
   </div>
 </div>
@@ -265,6 +276,10 @@
 
 <div class="toast-wrap" id="toastWrap"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="firebase-config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

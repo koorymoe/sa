@@ -2,27 +2,31 @@
 const CU = JSON.parse(sessionStorage.getItem('al_user') || 'null');
 if (!CU) location.href = 'index.html';
 
-// ── DB ──
-const db = {
-  get: k => JSON.parse(localStorage.getItem(k) || '[]'),
-  set: (k, v) => localStorage.setItem(k, JSON.stringify(v))
-};
-const getSups = () => db.get('al_suppliers');
-const setSups = v => db.set('al_suppliers', v);
-const getUsers = () => db.get('al_users');
-const setUsers = v => db.set('al_users', v);
-const getSpecs = () => db.get('al_specialties');
-const setSpecs = v => db.set('al_specialties', v);
+// ── FIRESTORE REFS ──
+const SUPS  = db.collection('suppliers');
+const USRS  = db.collection('users');
+const SPCS  = db.collection('specialties');
+
+// ── IN-MEMORY CACHE (updated by real-time listeners) ──
+let _sups  = [];
+let _users = [];
+let _specs = [];
 
 // ── STATE ──
 let mapObj = null, mapPin = null, curRating = 0;
+let dataReady = { sups: false, users: false, specs: false };
 
 // ── INIT ──
 (function init() {
+  setupUserUI();
+  startListeners();
+})();
+
+function setupUserUI() {
   const role = CU.role;
-  // User card
   document.getElementById('uName').textContent = CU.name;
   document.getElementById('uAvatar').textContent = CU.name.charAt(0);
+
   const rb = document.getElementById('uRoleBadge');
   const rl = { admin: 'مدير عام', manager: 'مدير', employee: 'موظف' };
   const rc = { admin: 'role-admin', manager: 'role-manager', employee: 'role-employee' };
@@ -39,22 +43,54 @@ let mapObj = null, mapPin = null, curRating = 0;
     document.getElementById('adminNav').style.display = 'block';
     document.getElementById('addUserBtn').style.display = 'block';
   }
+}
 
-  fillSpecDropdowns();
-  renderHome();
-  renderSups();
-  if (role === 'admin') { renderUsers(); renderSpecsTable(); }
-})();
+// ── REAL-TIME LISTENERS ──
+function startListeners() {
+  // Suppliers
+  SUPS.onSnapshot(snap => {
+    _sups = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    dataReady.sups = true;
+    checkReady();
+    renderHome();
+    filterSups();
+  }, err => console.error('Sups listener error:', err));
+
+  // Users
+  USRS.onSnapshot(snap => {
+    _users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    dataReady.users = true;
+    checkReady();
+    renderHome();
+    if (CU.role === 'admin') renderUsers();
+  }, err => console.error('Users listener error:', err));
+
+  // Specialties
+  SPCS.orderBy('order').onSnapshot(snap => {
+    _specs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    dataReady.specs = true;
+    checkReady();
+    fillSpecDropdowns();
+    if (CU.role === 'admin') renderSpecsTable();
+  }, err => console.error('Specs listener error:', err));
+}
+
+function checkReady() {
+  if (dataReady.sups && dataReady.users && dataReady.specs) {
+    document.getElementById('appLoader').style.display = 'none';
+    document.getElementById('appLayout').style.opacity = '1';
+  }
+}
 
 // ── NAV ──
 function showSec(s) {
   document.querySelectorAll('.section').forEach(x => x.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
   const map = {
-    home: { sec: 'secHome', nav: 'nav-home', title: 'الرئيسية' },
+    home:      { sec: 'secHome',      nav: 'nav-home',      title: 'الرئيسية' },
     suppliers: { sec: 'secSuppliers', nav: 'nav-suppliers', title: 'الموردون' },
-    users: { sec: 'secUsers', nav: 'nav-users', title: 'إدارة المستخدمين' },
-    specs: { sec: 'secSpecs', nav: 'nav-specs', title: 'التخصصات' }
+    users:     { sec: 'secUsers',     nav: 'nav-users',     title: 'إدارة المستخدمين' },
+    specs:     { sec: 'secSpecs',     nav: 'nav-specs',     title: 'التخصصات' }
   };
   const m = map[s];
   if (!m) return;
@@ -62,54 +98,53 @@ function showSec(s) {
   const nv = document.getElementById(m.nav);
   if (nv) nv.classList.add('active');
   document.getElementById('pageTitle').textContent = m.title;
-  // addUserBtn shown always for admin (visible in topbar)
-  if (s === 'home') renderHome();
-  if (s === 'suppliers') renderSups();
-  if (s === 'users') renderUsers();
-  if (s === 'specs') renderSpecsTable();
 }
 
-// ── SPECIALTIES DROPDOWN ──
+// ── SPEC DROPDOWNS ──
 function fillSpecDropdowns() {
-  const specs = getSpecs();
   ['fSpec', 'srchSpec'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    const first = id === 'srchSpec' ? '<option value="">جميع التخصصات</option>' : '<option value="">-- اختر التخصص --</option>';
-    el.innerHTML = first + specs.map(s => `<option value="${s}">${s}</option>`).join('');
+    const first = id === 'srchSpec'
+      ? '<option value="">جميع التخصصات</option>'
+      : '<option value="">-- اختر التخصص --</option>';
+    el.innerHTML = first + _specs.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
   });
 }
 
 // ── HOME ──
 function renderHome() {
-  const sups = getSups(), users = getUsers(), specs = getSpecs();
-  document.getElementById('stSup').textContent = sups.length;
-  document.getElementById('stUsr').textContent = users.length;
-  document.getElementById('stSpec').textContent = specs.length;
-  const avg = sups.length ? (sups.reduce((a, s) => a + (s.rating || 0), 0) / sups.length).toFixed(1) : '-';
+  document.getElementById('stSup').textContent  = _sups.length;
+  document.getElementById('stUsr').textContent  = _users.length;
+  document.getElementById('stSpec').textContent = _specs.length;
+  const rated = _sups.filter(s => s.rating > 0);
+  const avg = rated.length
+    ? (rated.reduce((a, s) => a + s.rating, 0) / rated.length).toFixed(1)
+    : '-';
   document.getElementById('stAvg').textContent = avg !== '-' ? avg + ' ★' : '-';
-  const top = [...sups].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 6);
+
+  const top = [..._sups].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 6);
   document.getElementById('topGrid').innerHTML = top.length
     ? top.map(supCard).join('')
     : `<div class="empty"><div class="empty-ico">🏢</div><h3>لا يوجد موردون بعد</h3><p>ابدأ بإضافة الموردين لظهورهم هنا</p></div>`;
 }
 
 // ── SUPPLIERS ──
-function renderSups() { filterSups(); }
-
 function filterSups() {
-  const txt = (document.getElementById('srchTxt')?.value || '').toLowerCase();
-  const spec = document.getElementById('srchSpec')?.value || '';
-  const type = document.getElementById('srchType')?.value || '';
-  let sups = getSups();
-  if (txt) sups = sups.filter(s =>
-    s.comp.toLowerCase().includes(txt) ||
-    s.owner.toLowerCase().includes(txt) ||
+  const txt  = (document.getElementById('srchTxt')?.value  || '').toLowerCase();
+  const spec = document.getElementById('srchSpec')?.value  || '';
+  const type = document.getElementById('srchType')?.value  || '';
+
+  let sups = [..._sups];
+  if (txt)  sups = sups.filter(s =>
+    (s.comp  || '').toLowerCase().includes(txt) ||
+    (s.owner || '').toLowerCase().includes(txt) ||
     (s.phone || '').includes(txt));
   if (spec) sups = sups.filter(s => s.spec === spec);
   if (type === 'mat') sups = sups.filter(s => s.mat);
   else if (type === 'con') sups = sups.filter(s => s.con);
   else if (type) sups = sups.filter(s => (s.types || []).includes(type));
+
   const g = document.getElementById('supGrid');
   if (!g) return;
   g.innerHTML = sups.length
@@ -118,10 +153,13 @@ function filterSups() {
 }
 
 function supCard(s) {
-  const stars = [1,2,3,4,5].map(i => `<span class="star${i<=(s.rating||0)?' on':''}" >★</span>`).join('');
-  const types = (s.types||[]).map(t=>`<span class="tag tag-${t}">${t}</span>`).join('');
-  const extras = (s.mat?'<span class="tag tag-mat">مورد مواد</span>':'') + (s.con?'<span class="tag tag-con">منفذ</span>':'');
-  const mapLnk = s.lat&&s.lng ? `<div class="sc-row"><span>📍</span><a href="https://maps.google.com?q=${s.lat},${s.lng}" target="_blank" onclick="event.stopPropagation()">عرض على الخريطة</a></div>` : '';
+  const stars  = [1,2,3,4,5].map(i => `<span class="star${i<=(s.rating||0)?' on':''}">★</span>`).join('');
+  const types  = (s.types||[]).map(t => `<span class="tag tag-${t}">${t}</span>`).join('');
+  const extras = (s.mat ? '<span class="tag tag-mat">مورد مواد</span>' : '')
+               + (s.con ? '<span class="tag tag-con">منفذ</span>' : '');
+  const mapLnk = s.lat && s.lng
+    ? `<div class="sc-row"><span>📍</span><a href="https://maps.google.com?q=${s.lat},${s.lng}" target="_blank" onclick="event.stopPropagation()">عرض على الخريطة</a></div>`
+    : '';
   return `<div class="supplier-card" onclick="showDetail('${s.id}')">
     <div class="sc-header">
       <div><div class="supplier-name">${esc(s.comp)}</div><span class="spec-tag">${esc(s.spec)}</span></div>
@@ -137,12 +175,14 @@ function supCard(s) {
 }
 
 function showDetail(id) {
-  const s = getSups().find(x => x.id === id);
+  const s = _sups.find(x => x.id === id);
   if (!s) return;
   document.getElementById('dtTitle').textContent = '🏢 ' + s.comp;
-  const stars = [1,2,3,4,5].map(i=>`<span class="star${i<=(s.rating||0)?' on':''}" >★</span>`).join('');
-  const types = (s.types||[]).map(t=>`<span class="tag tag-${t}">${t}</span>`).join('') || '<span style="color:var(--text3)">غير محدد</span>';
-  const mapLnk = s.lat&&s.lng ? `<a href="https://maps.google.com?q=${s.lat},${s.lng}" target="_blank" style="color:var(--primary-light)">فتح في خرائط جوجل ↗</a>` : 'غير محدد';
+  const stars  = [1,2,3,4,5].map(i => `<span class="star${i<=(s.rating||0)?' on':''}">★</span>`).join('');
+  const types  = (s.types||[]).map(t=>`<span class="tag tag-${t}">${t}</span>`).join('') || '<span style="color:var(--text3)">غير محدد</span>';
+  const mapLnk = s.lat && s.lng
+    ? `<a href="https://maps.google.com?q=${s.lat},${s.lng}" target="_blank" style="color:var(--primary-light)">فتح في خرائط جوجل ↗</a>`
+    : 'غير محدد';
   document.getElementById('dtBody').innerHTML = `
     <div class="detail-grid">
       <div class="d-item"><div class="d-label">اسم الشركة</div><div class="d-val">${esc(s.comp)}</div></div>
@@ -157,30 +197,31 @@ function showDetail(id) {
       ${s.notes?`<div class="d-item d-full"><div class="d-label">الملاحظات</div><div class="d-val">${esc(s.notes)}</div></div>`:''}
     </div>`;
   const canEdit = CU.role === 'admin' || CU.role === 'manager';
-  const canDel = CU.role === 'admin';
+  const canDel  = CU.role === 'admin';
   document.getElementById('dtFooter').innerHTML =
     `<button class="btn btn-ghost" onclick="closeM('mDetail')">إغلاق</button>` +
     (canEdit ? `<button class="btn btn-primary" onclick="editSup('${s.id}')">✏️ تعديل</button>` : '') +
-    (canDel ? `<button class="btn btn-danger" onclick="askDelSup('${s.id}')">🗑️ حذف</button>` : '');
+    (canDel  ? `<button class="btn btn-danger"  onclick="askDelSup('${s.id}')">🗑️ حذف</button>` : '');
   openM('mDetail');
 }
 
 function editSup(id) {
-  const s = getSups().find(x => x.id === id);
+  const s = _sups.find(x => x.id === id);
   if (!s) return;
   closeM('mDetail');
   document.getElementById('mSupTitle').textContent = '✏️ تعديل بيانات المورد';
-  document.getElementById('editId').value = id;
-  document.getElementById('fComp').value = s.comp;
-  document.getElementById('fOwner').value = s.owner;
-  document.getElementById('fSpec').value = s.spec;
-  document.getElementById('fPhone').value = s.phone;
-  document.getElementById('fLat').value = s.lat || '';
-  document.getElementById('fLng').value = s.lng || '';
-  document.getElementById('fNotes').value = s.notes || '';
-  setCb('cbMat', 'vMat', s.mat);
-  setCb('cbCon', 'vCon', s.con);
-  document.querySelectorAll('.type-opt').forEach(el => el.classList.toggle('sel', (s.types||[]).includes(el.dataset.t)));
+  document.getElementById('editId').value  = id;
+  document.getElementById('fComp').value   = s.comp  || '';
+  document.getElementById('fOwner').value  = s.owner || '';
+  document.getElementById('fSpec').value   = s.spec  || '';
+  document.getElementById('fPhone').value  = s.phone || '';
+  document.getElementById('fLat').value    = s.lat   || '';
+  document.getElementById('fLng').value    = s.lng   || '';
+  document.getElementById('fNotes').value  = s.notes || '';
+  setCb('cbMat', 'vMat', !!s.mat);
+  setCb('cbCon', 'vCon', !!s.con);
+  document.querySelectorAll('.type-opt').forEach(el =>
+    el.classList.toggle('sel', (s.types||[]).includes(el.dataset.t)));
   curRating = s.rating || 0;
   updateStars();
   openM('mSupplier');
@@ -195,124 +236,141 @@ function editSup(id) {
   }, 250);
 }
 
-function saveSup() {
-  const comp = document.getElementById('fComp').value.trim();
+async function saveSup() {
+  const comp  = document.getElementById('fComp').value.trim();
   const owner = document.getElementById('fOwner').value.trim();
-  const spec = document.getElementById('fSpec').value;
+  const spec  = document.getElementById('fSpec').value;
   const phone = document.getElementById('fPhone').value.trim();
-  if (!comp || !owner || !spec || !phone) { toast('يرجى تعبئة جميع الحقول المطلوبة (*)','err'); return; }
-  const lat = parseFloat(document.getElementById('fLat').value) || null;
-  const lng = parseFloat(document.getElementById('fLng').value) || null;
-  const mat = document.getElementById('vMat').value === '1';
-  const con = document.getElementById('vCon').value === '1';
-  const types = [...document.querySelectorAll('.type-opt.sel')].map(el => el.dataset.t);
-  const rating = curRating;
-  const notes = document.getElementById('fNotes').value.trim();
-  const id = document.getElementById('editId').value;
-  const sups = getSups();
-  if (id) {
-    const i = sups.findIndex(s => s.id === id);
-    if (i !== -1) sups[i] = { ...sups[i], comp, owner, spec, phone, lat, lng, mat, con, types, rating, notes };
-    toast('تم تحديث بيانات المورد', 'ok');
-  } else {
-    sups.push({ id: Date.now().toString(), comp, owner, spec, phone, lat, lng, mat, con, types, rating, notes, at: new Date().toISOString() });
-    toast('تم إضافة المورد بنجاح', 'ok');
+  if (!comp || !owner || !spec || !phone) {
+    toast('يرجى تعبئة جميع الحقول المطلوبة (*)', 'err');
+    return;
   }
-  setSups(sups);
-  closeM('mSupplier');
-  renderHome(); renderSups();
+  const btn = document.getElementById('saveSupBtn');
+  btn.disabled = true;
+  btn.textContent = 'جاري الحفظ...';
+  try {
+    const data = {
+      comp, owner, spec, phone,
+      lat:   parseFloat(document.getElementById('fLat').value) || null,
+      lng:   parseFloat(document.getElementById('fLng').value) || null,
+      mat:   document.getElementById('vMat').value === '1',
+      con:   document.getElementById('vCon').value === '1',
+      types: [...document.querySelectorAll('.type-opt.sel')].map(el => el.dataset.t),
+      rating: curRating,
+      notes:  document.getElementById('fNotes').value.trim(),
+      at:    new Date().toISOString()
+    };
+    const id = document.getElementById('editId').value;
+    if (id) {
+      await SUPS.doc(id).update(data);
+      toast('تم تحديث بيانات المورد ✓', 'ok');
+    } else {
+      await SUPS.add(data);
+      toast('تم إضافة المورد بنجاح ✓', 'ok');
+    }
+    closeM('mSupplier');
+  } catch (e) {
+    toast('خطأ في الحفظ: ' + e.message, 'err');
+  }
+  btn.disabled = false;
+  btn.textContent = '💾 حفظ المورد';
 }
 
 function askDelSup(id) {
-  const s = getSups().find(x => x.id === id);
+  const s = _sups.find(x => x.id === id);
   if (!s) return;
   document.getElementById('confirmMsg').textContent = `هل أنت متأكد من حذف "${s.comp}"؟ لا يمكن التراجع.`;
-  document.getElementById('confirmOk').onclick = () => {
-    setSups(getSups().filter(x => x.id !== id));
-    closeM('mConfirm'); closeM('mDetail');
-    renderHome(); renderSups();
-    toast('تم حذف المورد', 'ok');
+  document.getElementById('confirmOk').onclick = async () => {
+    try {
+      await SUPS.doc(id).delete();
+      closeM('mConfirm'); closeM('mDetail');
+      toast('تم حذف المورد ✓', 'ok');
+    } catch (e) { toast('خطأ في الحذف', 'err'); }
   };
   openM('mConfirm');
 }
 
 // ── USERS ──
 function renderUsers() {
-  const users = getUsers();
   const rl = { admin: 'مدير عام', manager: 'مدير', employee: 'موظف' };
   const rc = { admin: 'role-admin', manager: 'role-manager', employee: 'role-employee' };
-  document.getElementById('usersTbody').innerHTML = users.map((u, i) => `
+  document.getElementById('usersTbody').innerHTML = _users.map((u, i) => `
     <tr>
       <td>${i+1}</td>
       <td><strong>${esc(u.name)}</strong></td>
       <td dir="ltr" style="text-align:right">${esc(u.username)}</td>
       <td><span class="role-badge ${rc[u.role]||''}">${rl[u.role]||u.role}</span></td>
-      <td>${new Date(u.createdAt).toLocaleDateString('ar-IQ')}</td>
-      <td>${u.id!=='1'?`<button class="btn btn-danger btn-sm" onclick="askDelUser('${u.id}')">🗑️</button>`:'<span style="color:var(--text3)">محمي</span>'}</td>
+      <td>${u.createdAt ? new Date(u.createdAt).toLocaleDateString('ar-IQ') : '-'}</td>
+      <td>${u.role !== 'admin'
+        ? `<button class="btn btn-danger btn-sm" onclick="askDelUser('${u.id}')">🗑️</button>`
+        : '<span style="color:var(--text3)">محمي</span>'}</td>
     </tr>`).join('');
 }
 
-function saveUser() {
-  const role = document.getElementById('fRole').value;
-  const name = document.getElementById('fUName').value.trim();
+async function saveUser() {
+  const role     = document.getElementById('fRole').value;
+  const name     = document.getElementById('fUName').value.trim();
   const username = document.getElementById('fUUser').value.trim();
   const password = document.getElementById('fUPass').value.trim();
-  if (!role||!name||!username||!password) { toast('يرجى تعبئة جميع الحقول','err'); return; }
-  const users = getUsers();
-  if (users.find(u => u.username === username)) { toast('اسم الدخول مستخدم مسبقاً','err'); return; }
-  users.push({ id: Date.now().toString(), username, password, role, name, createdAt: new Date().toISOString() });
-  setUsers(users);
-  closeM('mUser');
-  renderUsers(); renderHome();
-  toast('تم إضافة المستخدم بنجاح','ok');
-  ['fRole','fUName','fUUser','fUPass'].forEach(id => document.getElementById(id).value='');
+  if (!role || !name || !username || !password) { toast('يرجى تعبئة جميع الحقول', 'err'); return; }
+  if (_users.find(u => u.username === username)) { toast('اسم الدخول مستخدم مسبقاً', 'err'); return; }
+  try {
+    await USRS.add({ username, password, role, name, createdAt: new Date().toISOString() });
+    closeM('mUser');
+    toast('تم إضافة المستخدم بنجاح ✓', 'ok');
+    ['fRole','fUName','fUUser','fUPass'].forEach(id => document.getElementById(id).value = '');
+  } catch (e) { toast('خطأ في الإضافة', 'err'); }
 }
 
 function askDelUser(id) {
-  const u = getUsers().find(x => x.id === id);
+  const u = _users.find(x => x.id === id);
   if (!u) return;
-  document.getElementById('confirmMsg').textContent = `هل أنت متأكد من حذف "${u.name}"؟`;
-  document.getElementById('confirmOk').onclick = () => {
-    setUsers(getUsers().filter(x => x.id !== id));
-    closeM('mConfirm'); renderUsers(); renderHome();
-    toast('تم حذف المستخدم','ok');
+  document.getElementById('confirmMsg').textContent = `هل أنت متأكد من حذف المستخدم "${u.name}"؟`;
+  document.getElementById('confirmOk').onclick = async () => {
+    try {
+      await USRS.doc(id).delete();
+      closeM('mConfirm');
+      toast('تم حذف المستخدم ✓', 'ok');
+    } catch (e) { toast('خطأ في الحذف', 'err'); }
   };
   openM('mConfirm');
 }
 
 // ── SPECIALTIES ──
 function renderSpecsTable() {
-  const specs = getSpecs(), sups = getSups();
-  document.getElementById('specsTbody').innerHTML = specs.map((s, i) => {
-    const cnt = sups.filter(x => x.spec === s).length;
-    return `<tr><td>${i+1}</td><td>${esc(s)}</td><td>${cnt}</td><td><button class="btn btn-danger btn-sm" onclick="askDelSpec(${i})">🗑️</button></td></tr>`;
+  document.getElementById('specsTbody').innerHTML = _specs.map((s, i) => {
+    const cnt = _sups.filter(x => x.spec === s.name).length;
+    return `<tr>
+      <td>${i+1}</td>
+      <td>${esc(s.name)}</td>
+      <td>${cnt}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="askDelSpec('${s.id}')">🗑️</button></td>
+    </tr>`;
   }).join('');
 }
 
-function saveSpec() {
+async function saveSpec() {
   const name = document.getElementById('fSpecName').value.trim();
-  if (!name) { toast('أدخل اسم التخصص','err'); return; }
-  const specs = getSpecs();
-  if (specs.includes(name)) { toast('التخصص موجود مسبقاً','err'); return; }
-  specs.push(name);
-  setSpecs(specs);
-  fillSpecDropdowns();
-  closeM('mSpecialty');
-  renderSpecsTable();
-  document.getElementById('fSpecName').value = '';
-  toast('تم إضافة التخصص','ok');
+  if (!name) { toast('أدخل اسم التخصص', 'err'); return; }
+  if (_specs.find(s => s.name === name)) { toast('التخصص موجود مسبقاً', 'err'); return; }
+  try {
+    await SPCS.add({ name, order: _specs.length });
+    closeM('mSpecialty');
+    document.getElementById('fSpecName').value = '';
+    toast('تم إضافة التخصص ✓', 'ok');
+  } catch (e) { toast('خطأ في الإضافة', 'err'); }
 }
 
-function askDelSpec(i) {
-  const specs = getSpecs();
-  document.getElementById('confirmMsg').textContent = `هل أنت متأكد من حذف تخصص "${specs[i]}"؟`;
-  document.getElementById('confirmOk').onclick = () => {
-    specs.splice(i, 1);
-    setSpecs(specs);
-    fillSpecDropdowns();
-    closeM('mConfirm');
-    renderSpecsTable();
-    toast('تم حذف التخصص','ok');
+function askDelSpec(id) {
+  const s = _specs.find(x => x.id === id);
+  if (!s) return;
+  document.getElementById('confirmMsg').textContent = `هل أنت متأكد من حذف تخصص "${s.name}"؟`;
+  document.getElementById('confirmOk').onclick = async () => {
+    try {
+      await SPCS.doc(id).delete();
+      closeM('mConfirm');
+      toast('تم حذف التخصص ✓', 'ok');
+    } catch (e) { toast('خطأ في الحذف', 'err'); }
   };
   openM('mConfirm');
 }
@@ -348,7 +406,8 @@ function toggleCb(fieldId, inputId) {
   const f = document.getElementById(fieldId);
   const inp = document.getElementById(inputId);
   const isYes = f.classList.contains('yes');
-  f.className = f.className.replace(isYes?'yes':'no', isYes?'no':'yes');
+  f.classList.remove('yes','no');
+  f.classList.add(isYes ? 'no' : 'yes');
   f.querySelector('.cb-box').textContent = isYes ? '✗' : '✓';
   inp.value = isYes ? '0' : '1';
 }
@@ -357,7 +416,7 @@ function setCb(fieldId, inputId, val) {
   const f = document.getElementById(fieldId);
   const inp = document.getElementById(inputId);
   f.classList.remove('yes','no');
-  f.classList.add(val?'yes':'no');
+  f.classList.add(val ? 'yes' : 'no');
   f.querySelector('.cb-box').textContent = val ? '✓' : '✗';
   inp.value = val ? '1' : '0';
 }
@@ -365,10 +424,11 @@ function setCb(fieldId, inputId, val) {
 // ── RATING ──
 function setRating(v) { curRating = v; updateStars(); }
 function updateStars() {
-  document.querySelectorAll('.r-star').forEach(s => s.classList.toggle('on', parseInt(s.dataset.v) <= curRating));
+  document.querySelectorAll('.r-star').forEach(s =>
+    s.classList.toggle('on', parseInt(s.dataset.v) <= curRating));
 }
 
-// ── MODAL ──
+// ── MODALS ──
 function openM(id) {
   document.getElementById(id).classList.add('open');
   if (id === 'mSupplier') setTimeout(() => { initMap(); mapObj.invalidateSize(); }, 150);
@@ -382,11 +442,16 @@ function closeM(id) {
 function resetSupForm() {
   document.getElementById('editId').value = '';
   document.getElementById('mSupTitle').textContent = '🏢 إضافة مورد جديد';
-  ['fComp','fOwner','fPhone','fLat','fLng','fNotes'].forEach(i => { const el=document.getElementById(i); if(el) el.value=''; });
+  ['fComp','fOwner','fPhone','fLat','fLng','fNotes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
   document.getElementById('fSpec').value = '';
-  setCb('cbMat','vMat',false); setCb('cbCon','vCon',false);
+  setCb('cbMat','vMat',false);
+  setCb('cbCon','vCon',false);
   document.querySelectorAll('.type-opt').forEach(el => el.classList.remove('sel'));
-  curRating = 0; updateStars();
+  curRating = 0;
+  updateStars();
   if (mapPin && mapObj) { mapObj.removeLayer(mapPin); mapPin = null; }
   if (mapObj) mapObj.setView([33.3152, 44.3661], 6);
 }
@@ -401,15 +466,21 @@ function closeDrop() { document.querySelectorAll('.dropdown').forEach(d => d.cla
 document.addEventListener('click', e => { if (!e.target.closest('.dropdown')) closeDrop(); });
 
 // ── TOAST ──
-function toast(msg, type='info') {
-  const cls = { ok:'toast-ok', err:'toast-err', info:'toast-info' };
+function toast(msg, type = 'info') {
+  const cls = { ok: 'toast-ok', err: 'toast-err', info: 'toast-info' };
   const t = document.createElement('div');
-  t.className = 'toast ' + (cls[type]||'toast-info');
+  t.className = 'toast ' + (cls[type] || 'toast-info');
   t.textContent = msg;
   document.getElementById('toastWrap').appendChild(t);
-  setTimeout(() => t.remove(), 3000);
+  setTimeout(() => t.remove(), 3500);
 }
 
 // ── UTILS ──
-function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function logout() { sessionStorage.removeItem('al_user'); location.href='index.html'; }
+function esc(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function logout() {
+  sessionStorage.removeItem('al_user');
+  location.href = 'index.html';
+}

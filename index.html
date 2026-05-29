@@ -7,7 +7,14 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body class="login-body">
-<div class="login-card">
+
+<!-- Loading overlay -->
+<div id="loadingOverlay" style="position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:16px">
+  <div class="login-logo" style="animation:pulse 1.5s ease-in-out infinite">🏗️</div>
+  <div style="color:var(--text2);font-size:14px">جاري الاتصال...</div>
+</div>
+
+<div class="login-card" id="loginCard" style="opacity:0;transition:opacity .4s">
   <div class="login-logo">🏗️</div>
   <h1>شركة الاماني</h1>
   <p class="subtitle">نظام إدارة الموردين والتخصصات</p>
@@ -24,55 +31,109 @@
       </div>
     </div>
     <div id="loginError" class="error-msg" style="display:none"></div>
-    <button type="submit" class="btn btn-primary btn-full">تسجيل الدخول &larr;</button>
+    <button type="submit" class="btn btn-primary btn-full" id="loginBtn">تسجيل الدخول &larr;</button>
   </form>
 </div>
-<script>
-(function(){
-  if(!localStorage.getItem('al_users')){
-    localStorage.setItem('al_users',JSON.stringify([
-      {id:'1',username:'admin',password:'admin123',role:'admin',name:'المدير العام',createdAt:new Date().toISOString()}
-    ]));
-  }
-  if(!localStorage.getItem('al_specialties')){
-    localStorage.setItem('al_specialties',JSON.stringify([
-      'أعمال مساحة',
-      'تصاميم إنشائية واستشارات هندسية',
-      'تصاميم معمارية',
-      'مكتب مقاولات',
-      'أعمال ترابية',
-      'تأجير آليات',
-      'التأسيسات والأنظمة',
-      'المواد الصحية',
-      'كيميائيات البناء الحديث',
-      'التشطيبات',
-      'خباطات الخرسانة',
-      'خدمات أخرى'
-    ]));
-  }
-  if(!localStorage.getItem('al_suppliers')) localStorage.setItem('al_suppliers','[]');
-  if(sessionStorage.getItem('al_user')) location.href='dashboard.html';
-})();
 
-document.getElementById('loginForm').addEventListener('submit',function(e){
+<style>
+@keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.08);opacity:.8} }
+.spin { width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite }
+@keyframes spin { to{transform:rotate(360deg)} }
+</style>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+const DEFAULT_SPECS = [
+  'أعمال مساحة',
+  'تصاميم إنشائية واستشارات هندسية',
+  'تصاميم معمارية',
+  'مكتب مقاولات',
+  'أعمال ترابية',
+  'تأجير آليات',
+  'التأسيسات والأنظمة',
+  'المواد الصحية',
+  'كيميائيات البناء الحديث',
+  'التشطيبات',
+  'خباطات الخرسانة',
+  'خدمات أخرى'
+];
+
+// Redirect if already logged in
+if (sessionStorage.getItem('al_user')) {
+  location.href = 'dashboard.html';
+}
+
+// Initialize default data on first run
+async function initDefaults() {
+  try {
+    // Check admin
+    const adminSnap = await db.collection('users').where('role', '==', 'admin').limit(1).get();
+    if (adminSnap.empty) {
+      await db.collection('users').add({
+        username: 'admin',
+        password: 'admin123',
+        role: 'admin',
+        name: 'المدير العام',
+        createdAt: new Date().toISOString()
+      });
+    }
+    // Check specialties
+    const specsSnap = await db.collection('specialties').limit(1).get();
+    if (specsSnap.empty) {
+      const batch = db.batch();
+      DEFAULT_SPECS.forEach((name, i) => {
+        batch.set(db.collection('specialties').doc(), { name, order: i });
+      });
+      await batch.commit();
+    }
+  } catch (e) {
+    console.error('Init error:', e);
+  }
+  // Show login form
+  document.getElementById('loadingOverlay').style.display = 'none';
+  document.getElementById('loginCard').style.opacity = '1';
+}
+
+initDefaults();
+
+document.getElementById('loginForm').addEventListener('submit', async function(e) {
   e.preventDefault();
-  const u=document.getElementById('username').value.trim();
-  const p=document.getElementById('password').value;
-  const users=JSON.parse(localStorage.getItem('al_users')||'[]');
-  const user=users.find(x=>x.username===u&&x.password===p);
-  const err=document.getElementById('loginError');
-  if(user){
-    sessionStorage.setItem('al_user',JSON.stringify(user));
-    location.href='dashboard.html';
-  } else {
-    err.textContent='❌ اسم المستخدم أو كلمة المرور غير صحيحة';
-    err.style.display='block';
+  const u = document.getElementById('username').value.trim();
+  const p = document.getElementById('password').value;
+  const btn = document.getElementById('loginBtn');
+  const err = document.getElementById('loginError');
+  err.style.display = 'none';
+  btn.textContent = 'جاري التحقق...';
+  btn.disabled = true;
+  try {
+    const snap = await db.collection('users')
+      .where('username', '==', u)
+      .where('password', '==', p)
+      .limit(1)
+      .get();
+    if (!snap.empty) {
+      const user = { id: snap.docs[0].id, ...snap.docs[0].data() };
+      sessionStorage.setItem('al_user', JSON.stringify(user));
+      location.href = 'dashboard.html';
+    } else {
+      err.textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة';
+      err.style.display = 'block';
+      btn.textContent = 'تسجيل الدخول ←';
+      btn.disabled = false;
+    }
+  } catch (ex) {
+    err.textContent = '❌ خطأ في الاتصال، تحقق من الإنترنت';
+    err.style.display = 'block';
+    btn.textContent = 'تسجيل الدخول ←';
+    btn.disabled = false;
   }
 });
 
-function togglePwd(){
-  const el=document.getElementById('password');
-  el.type=el.type==='password'?'text':'password';
+function togglePwd() {
+  const el = document.getElementById('password');
+  el.type = el.type === 'password' ? 'text' : 'password';
 }
 </script>
 </body>
