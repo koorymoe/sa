@@ -102,20 +102,57 @@ function showSec(s) {
 
 // ── SPEC DROPDOWNS ──
 function fillSpecDropdowns() {
-  // Search filter dropdown (single select)
+  // Search filter dropdown
   const srch = document.getElementById('srchSpec');
   if (srch) {
     srch.innerHTML = '<option value="">جميع التخصصات</option>' +
       _specs.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
   }
-  // Form multi-picker
-  const picker = document.getElementById('specsPicker');
-  if (picker) {
-    const selected = [...picker.querySelectorAll('.spec-pick.sel')].map(el => el.dataset.s);
-    picker.innerHTML = _specs.map(s =>
-      `<span class="spec-pick${selected.includes(s.name) ? ' sel' : ''}" data-s="${s.name}" onclick="this.classList.toggle('sel')">${s.name}</span>`
-    ).join('');
+  // Form multi-select items
+  const items = document.getElementById('specsItems');
+  if (items) {
+    const selected = getSelectedSpecs();
+    items.innerHTML = _specs.map(s => `
+      <div class="ms-item${selected.includes(s.name) ? ' sel' : ''}" onclick="toggleSpecItem(this)" data-s="${s.name}">
+        <div class="ms-chk">${selected.includes(s.name) ? '✓' : ''}</div>
+        <span>${s.name}</span>
+      </div>`).join('');
   }
+}
+
+function toggleSpecItem(el) {
+  el.classList.toggle('sel');
+  el.querySelector('.ms-chk').textContent = el.classList.contains('sel') ? '✓' : '';
+  updateSpecsLabel();
+}
+
+function toggleSpecsDrop() {
+  document.getElementById('specsDropWrap').classList.toggle('open');
+}
+
+function closeSpecsDrop() {
+  document.getElementById('specsDropWrap').classList.remove('open');
+}
+
+function updateSpecsLabel() {
+  const sel = getSelectedSpecs();
+  const lbl = document.getElementById('specsLabel');
+  if (!lbl) return;
+  lbl.style.color = sel.length ? 'var(--text)' : 'var(--text2)';
+  lbl.textContent = sel.length ? sel.join(' | ') : '-- اختر التخصصات --';
+}
+
+function getSelectedSpecs() {
+  return [...document.querySelectorAll('#specsItems .ms-item.sel')].map(el => el.dataset.s);
+}
+
+function setSelectedSpecs(specs) {
+  document.querySelectorAll('#specsItems .ms-item').forEach(el => {
+    const isSel = specs.includes(el.dataset.s);
+    el.classList.toggle('sel', isSel);
+    el.querySelector('.ms-chk').textContent = isSel ? '✓' : '';
+  });
+  updateSpecsLabel();
 }
 
 // ── HOME ──
@@ -222,9 +259,7 @@ function editSup(id) {
   document.getElementById('fComp').value   = s.comp  || '';
   document.getElementById('fOwner').value  = s.owner || '';
   document.getElementById('fPhone').value  = s.phone || '';
-  // Restore multi-spec selection
-  document.querySelectorAll('.spec-pick').forEach(el =>
-    el.classList.toggle('sel', (s.specs||[]).includes(el.dataset.s)));
+  setSelectedSpecs(s.specs || []);
   document.getElementById('fLat').value    = s.lat   || '';
   document.getElementById('fLng').value    = s.lng   || '';
   document.getElementById('fNotes').value  = s.notes || '';
@@ -250,7 +285,7 @@ async function saveSup() {
   const comp  = document.getElementById('fComp').value.trim();
   const owner = document.getElementById('fOwner').value.trim();
   const phone = document.getElementById('fPhone').value.trim();
-  const specs = [...document.querySelectorAll('.spec-pick.sel')].map(el => el.dataset.s);
+  const specs = getSelectedSpecs();
   if (!comp || !owner || !phone || specs.length === 0) {
     toast('يرجى تعبئة جميع الحقول المطلوبة واختيار تخصص واحد على الأقل', 'err');
     return;
@@ -456,7 +491,8 @@ function resetSupForm() {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
-  document.querySelectorAll('.spec-pick').forEach(el => el.classList.remove('sel'));
+  setSelectedSpecs([]);
+  closeSpecsDrop();
   setCb('cbMat','vMat',false);
   setCb('cbCon','vCon',false);
   document.querySelectorAll('.type-opt').forEach(el => el.classList.remove('sel'));
@@ -473,7 +509,10 @@ document.querySelectorAll('.modal-overlay').forEach(o => {
 // ── DROPDOWN ──
 function toggleDrop(id) { document.getElementById(id).classList.toggle('open'); }
 function closeDrop() { document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('open')); }
-document.addEventListener('click', e => { if (!e.target.closest('.dropdown')) closeDrop(); });
+document.addEventListener('click', e => {
+  if (!e.target.closest('.dropdown')) closeDrop();
+  if (!e.target.closest('.ms-wrap')) closeSpecsDrop();
+});
 
 // ── TOAST ──
 function toast(msg, type = 'info') {

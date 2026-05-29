@@ -154,7 +154,18 @@
 
       <div class="form-group">
         <label>التخصصات * <span style="font-size:11px;color:var(--text3)">(يمكن اختيار أكثر من واحد)</span></label>
-        <div class="specs-picker" id="specsPicker"></div>
+        <div class="ms-wrap" id="specsDropWrap">
+          <div class="ms-trigger" id="specsTrigger" onclick="toggleSpecsDrop()">
+            <span id="specsLabel">-- اختر التخصصات --</span>
+            <span class="ms-arrow">▾</span>
+          </div>
+          <div class="ms-menu" id="specsMenu">
+            <div class="ms-list" id="specsItems"></div>
+            <div class="ms-footer">
+              <button class="btn btn-primary btn-sm" onclick="closeSpecsDrop()">تم ✓</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="fdiv">📍 الموقع الجغرافي</div>
