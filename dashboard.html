@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>شركة الاماني - لوحة التحكم</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🏗️</div>
+      <div>
+        <div class="company-name">شركة الاماني</div>
+        <div class="system-name">إدارة الموردين</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-label">القائمة الرئيسية</div>
+      <div class="nav-item active" id="nav-home" onclick="showSec('home')">
+        <span class="nav-icon">🏠</span> الرئيسية
+      </div>
+      <div class="nav-item" id="nav-suppliers" onclick="showSec('suppliers')">
+        <span class="nav-icon">🏢</span> الموردون
+      </div>
+      <div id="adminNav" style="display:none">
+        <div class="nav-label">إدارة النظام</div>
+        <div class="nav-item" id="nav-users" onclick="showSec('users')">
+          <span class="nav-icon">👥</span> المستخدمون
+        </div>
+        <div class="nav-item" id="nav-specs" onclick="showSec('specs')">
+          <span class="nav-icon">📋</span> التخصصات
+        </div>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="user-avatar" id="uAvatar"></div>
+        <div class="user-info">
+          <div class="user-name" id="uName"></div>
+          <div class="user-role-text"><span class="role-badge" id="uRoleBadge"></span></div>
+        </div>
+      </div>
+      <button class="logout-btn" onclick="logout()">🚪 تسجيل الخروج</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main-content">
+    <header class="topbar">
+      <div class="topbar-title" id="pageTitle">الرئيسية</div>
+      <div class="topbar-actions">
+        <div class="dropdown" id="addDrop" style="display:none">
+          <button class="btn btn-primary" onclick="toggleDrop('addDrop')">✦ إضافة</button>
+          <div class="dropdown-menu">
+            <div class="dropdown-item" onclick="openM('mSupplier');closeDrop()">🏢 إضافة مورد</div>
+            <div class="dropdown-item" id="ddSpecialty" onclick="openM('mSpecialty');closeDrop()">📋 إضافة تخصص</div>
+          </div>
+        </div>
+        <button class="btn btn-ghost" id="addUserBtn" style="display:none" onclick="openM('mUser')">👤 إضافة مستخدم</button>
+      </div>
+    </header>
+
+    <div class="page-content">
+
+      <!-- HOME -->
+      <section id="secHome" class="section active">
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-icon si-purple">🏢</div><div><div class="stat-value" id="stSup">0</div><div class="stat-label">إجمالي الموردين</div></div></div>
+          <div class="stat-card"><div class="stat-icon si-green">👥</div><div><div class="stat-value" id="stUsr">0</div><div class="stat-label">المستخدمون</div></div></div>
+          <div class="stat-card"><div class="stat-icon si-blue">📋</div><div><div class="stat-value" id="stSpec">0</div><div class="stat-label">التخصصات</div></div></div>
+          <div class="stat-card"><div class="stat-icon si-orange">⭐</div><div><div class="stat-value" id="stAvg">-</div><div class="stat-label">متوسط التقييم</div></div></div>
+        </div>
+        <div class="sec-header"><h2>⭐ أعلى الموردين تقييماً</h2></div>
+        <div class="cards-grid" id="topGrid"></div>
+      </section>
+
+      <!-- SUPPLIERS -->
+      <section id="secSuppliers" class="section">
+        <div class="search-bar">
+          <div class="search-wrap">
+            <span class="search-ico">🔍</span>
+            <input type="text" id="srchTxt" placeholder="ابحث باسم الشركة أو المالك..." oninput="filterSups()">
+          </div>
+          <select class="filter-sel" id="srchSpec" onchange="filterSups()">
+            <option value="">جميع التخصصات</option>
+          </select>
+          <select class="filter-sel" id="srchType" onchange="filterSups()">
+            <option value="">جميع الأنواع</option>
+            <option value="mat">مورد مواد</option>
+            <option value="con">منفذ وكوادر</option>
+            <option value="وكيل">وكيل</option>
+            <option value="موزع">موزع</option>
+            <option value="تاجر">تاجر</option>
+          </select>
+        </div>
+        <div class="cards-grid" id="supGrid"></div>
+      </section>
+
+      <!-- USERS (admin) -->
+      <section id="secUsers" class="section">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>#</th><th>الاسم</th><th>اسم الدخول</th><th>الدور</th><th>تاريخ الإضافة</th><th>إجراء</th></tr></thead>
+            <tbody id="usersTbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SPECIALTIES (admin) -->
+      <section id="secSpecs" class="section">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>#</th><th>التخصص</th><th>عدد الموردين</th><th>إجراء</th></tr></thead>
+            <tbody id="specsTbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- ═══ MODAL: ADD SUPPLIER ═══ -->
+<div class="modal-overlay" id="mSupplier">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <div class="modal-title" id="mSupTitle">🏢 إضافة مورد جديد</div>
+      <button class="modal-close" onclick="closeM('mSupplier')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editId">
+      <div class="form-row">
+        <div class="form-group"><label>اسم الشركة *</label><input type="text" id="fComp" placeholder="اسم الشركة أو المؤسسة"></div>
+        <div class="form-group"><label>اسم المالك *</label><input type="text" id="fOwner" placeholder="اسم صاحب الشركة"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>التخصص *</label><select id="fSpec"><option value="">-- اختر التخصص --</option></select></div>
+        <div class="form-group"><label>رقم الهاتف *</label><input type="tel" id="fPhone" placeholder="07XX XXX XXXX" dir="ltr"></div>
+      </div>
+
+      <div class="fdiv">📍 الموقع الجغرافي</div>
+      <div id="supplierMap"></div>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:10px">انقر على الخريطة لتحديد الموقع، أو أدخل الإحداثيات يدوياً</p>
+      <div class="coords-row">
+        <div class="form-group" style="margin:0"><label>خط العرض (Lat)</label><input type="number" id="fLat" placeholder="33.3152" step="any" oninput="movePinFromInput()"></div>
+        <div class="form-group" style="margin:0"><label>خط الطول (Lng)</label><input type="number" id="fLng" placeholder="44.3661" step="any" oninput="movePinFromInput()"></div>
+      </div>
+
+      <div class="fdiv">📦 نوع النشاط</div>
+      <div class="cb-field no" id="cbMat" onclick="toggleCb('cbMat','vMat')">
+        <label>مورد مواد</label>
+        <input type="hidden" id="vMat" value="0">
+        <div class="cb-box">✗</div>
+      </div>
+      <div class="cb-field no" id="cbCon" onclick="toggleCb('cbCon','vCon')">
+        <label>منفذ وكوادر عاملة</label>
+        <input type="hidden" id="vCon" value="0">
+        <div class="cb-box">✗</div>
+      </div>
+
+      <div class="fdiv">🏷️ نوع التاجر (يمكن اختيار أكثر من واحد)</div>
+      <div class="type-sel">
+        <div class="type-opt" onclick="this.classList.toggle('sel')" data-t="وكيل">وكيل</div>
+        <div class="type-opt" onclick="this.classList.toggle('sel')" data-t="موزع">موزع</div>
+        <div class="type-opt" onclick="this.classList.toggle('sel')" data-t="تاجر">تاجر</div>
+      </div>
+
+      <div class="fdiv">⭐ التقييم والملاحظات</div>
+      <div class="form-group">
+        <label>التقييم</label>
+        <div class="rating-row" id="ratingRow">
+          <span class="r-star" data-v="1" onclick="setRating(1)">★</span>
+          <span class="r-star" data-v="2" onclick="setRating(2)">★</span>
+          <span class="r-star" data-v="3" onclick="setRating(3)">★</span>
+          <span class="r-star" data-v="4" onclick="setRating(4)">★</span>
+          <span class="r-star" data-v="5" onclick="setRating(5)">★</span>
+        </div>
+        <input type="hidden" id="fRating" value="0">
+      </div>
+      <div class="form-group"><label>الملاحظات</label><textarea id="fNotes" placeholder="ملاحظات إضافية عن المورد..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeM('mSupplier')">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveSup()">💾 حفظ المورد</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: ADD SPECIALTY ═══ -->
+<div class="modal-overlay" id="mSpecialty">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <div class="modal-title">📋 إضافة تخصص جديد</div>
+      <button class="modal-close" onclick="closeM('mSpecialty')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>اسم التخصص *</label><input type="text" id="fSpecName" placeholder="أدخل اسم التخصص"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeM('mSpecialty')">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveSpec()">إضافة</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: ADD USER ═══ -->
+<div class="modal-overlay" id="mUser">
+  <div class="modal" style="max-width:430px">
+    <div class="modal-header">
+      <div class="modal-title">👤 إضافة مستخدم</div>
+      <button class="modal-close" onclick="closeM('mUser')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>نوع المستخدم *</label>
+        <select id="fRole">
+          <option value="">-- اختر النوع --</option>
+          <option value="manager">مدير</option>
+          <option value="employee">موظف</option>
+        </select>
+      </div>
+      <div class="form-group"><label>الاسم الكامل *</label><input type="text" id="fUName" placeholder="الاسم الكامل"></div>
+      <div class="form-group"><label>اسم الدخول *</label><input type="text" id="fUUser" placeholder="اسم المستخدم" dir="ltr"></div>
+      <div class="form-group"><label>كلمة المرور *</label><input type="text" id="fUPass" placeholder="كلمة المرور"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeM('mUser')">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveUser()">إضافة</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: SUPPLIER DETAIL ═══ -->
+<div class="modal-overlay" id="mDetail">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <div class="modal-title" id="dtTitle"></div>
+      <button class="modal-close" onclick="closeM('mDetail')">✕</button>
+    </div>
+    <div class="modal-body" id="dtBody"></div>
+    <div class="modal-footer" id="dtFooter"></div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: CONFIRM ═══ -->
+<div class="modal-overlay" id="mConfirm">
+  <div class="modal" style="max-width:360px">
+    <div class="confirm-body">
+      <div class="confirm-ico">🗑️</div>
+      <div class="confirm-title">تأكيد الحذف</div>
+      <div class="confirm-text" id="confirmMsg"></div>
+      <div class="confirm-btns">
+        <button class="btn btn-ghost" onclick="closeM('mConfirm')">إلغاء</button>
+        <button class="btn btn-danger" id="confirmOk">حذف</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
