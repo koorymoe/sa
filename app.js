@@ -13,7 +13,7 @@ let _users = [];
 let _specs = [];
 
 // ── STATE ──
-let mapObj = null, mapPin = null, curRating = 0;
+let mapObj = null, mapPin = null, curRating = 0, _selectedSpecs = [];
 let dataReady = { sups: false, users: false, specs: false };
 
 // ── INIT ──
@@ -102,56 +102,69 @@ function showSec(s) {
 
 // ── SPEC DROPDOWNS ──
 function fillSpecDropdowns() {
-  // Search filter dropdown
+  // Search filter only (form dropdown populates on open)
   const srch = document.getElementById('srchSpec');
   if (srch) {
     srch.innerHTML = '<option value="">جميع التخصصات</option>' +
       _specs.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
   }
-  // Form multi-select items
-  const items = document.getElementById('specsItems');
-  if (items) {
-    const selected = getSelectedSpecs();
-    items.innerHTML = _specs.map(s => `
-      <div class="ms-item${selected.includes(s.name) ? ' sel' : ''}" onclick="toggleSpecItem(this)" data-s="${s.name}">
-        <div class="ms-chk">${selected.includes(s.name) ? '✓' : ''}</div>
-        <span>${s.name}</span>
-      </div>`).join('');
-  }
+}
+
+// Called when user clicks the trigger field - populates fresh from _specs
+function openSpecsDrop() {
+  const trigger = document.getElementById('specsTrigger');
+  const menu    = document.getElementById('specsMenu');
+  const arrow   = document.getElementById('specsArrow');
+  const items   = document.getElementById('specsItems');
+  const isOpen  = menu.style.display === 'block';
+
+  if (isOpen) { closeSpecsDrop(); return; }
+
+  // Build list fresh every time
+  const selected = _selectedSpecs;
+  items.innerHTML = _specs.map(s => `
+    <div class="ms-item${selected.includes(s.name) ? ' sel' : ''}"
+         onclick="toggleSpecItem(this)" data-s="${s.name}">
+      <div class="ms-chk">${selected.includes(s.name) ? '✓' : ''}</div>
+      <span>${s.name}</span>
+    </div>`).join('');
+
+  menu.style.display = 'block';
+  trigger.classList.add('open');
+  arrow.classList.add('up');
+}
+
+function closeSpecsDrop() {
+  document.getElementById('specsMenu').style.display    = 'none';
+  document.getElementById('specsTrigger').classList.remove('open');
+  document.getElementById('specsArrow').classList.remove('up');
+  // Sync selected state from DOM to memory
+  _selectedSpecs = [...document.querySelectorAll('#specsItems .ms-item.sel')].map(el => el.dataset.s);
+  updateSpecsLabel();
 }
 
 function toggleSpecItem(el) {
   el.classList.toggle('sel');
   el.querySelector('.ms-chk').textContent = el.classList.contains('sel') ? '✓' : '';
-  updateSpecsLabel();
-}
-
-function toggleSpecsDrop() {
-  document.getElementById('specsDropWrap').classList.toggle('open');
-}
-
-function closeSpecsDrop() {
-  document.getElementById('specsDropWrap').classList.remove('open');
 }
 
 function updateSpecsLabel() {
-  const sel = getSelectedSpecs();
   const lbl = document.getElementById('specsLabel');
+  const trig = document.getElementById('specsTrigger');
   if (!lbl) return;
-  lbl.style.color = sel.length ? 'var(--text)' : 'var(--text2)';
-  lbl.textContent = sel.length ? sel.join(' | ') : '-- اختر التخصصات --';
+  if (_selectedSpecs.length > 0) {
+    lbl.textContent = _selectedSpecs.join(' | ');
+    trig.classList.add('has-val');
+  } else {
+    lbl.textContent = '-- اختر التخصصات --';
+    trig.classList.remove('has-val');
+  }
 }
 
-function getSelectedSpecs() {
-  return [...document.querySelectorAll('#specsItems .ms-item.sel')].map(el => el.dataset.s);
-}
+function getSelectedSpecs() { return _selectedSpecs; }
 
 function setSelectedSpecs(specs) {
-  document.querySelectorAll('#specsItems .ms-item').forEach(el => {
-    const isSel = specs.includes(el.dataset.s);
-    el.classList.toggle('sel', isSel);
-    el.querySelector('.ms-chk').textContent = isSel ? '✓' : '';
-  });
+  _selectedSpecs = [...specs];
   updateSpecsLabel();
 }
 
@@ -491,8 +504,11 @@ function resetSupForm() {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
-  setSelectedSpecs([]);
-  closeSpecsDrop();
+  _selectedSpecs = [];
+  updateSpecsLabel();
+  document.getElementById('specsMenu').style.display = 'none';
+  document.getElementById('specsTrigger').classList.remove('open','has-val');
+  document.getElementById('specsArrow').classList.remove('up');
   setCb('cbMat','vMat',false);
   setCb('cbCon','vCon',false);
   document.querySelectorAll('.type-opt').forEach(el => el.classList.remove('sel'));
@@ -511,7 +527,7 @@ function toggleDrop(id) { document.getElementById(id).classList.toggle('open'); 
 function closeDrop() { document.querySelectorAll('.dropdown').forEach(d => d.classList.remove('open')); }
 document.addEventListener('click', e => {
   if (!e.target.closest('.dropdown')) closeDrop();
-  if (!e.target.closest('.ms-wrap')) closeSpecsDrop();
+  if (!e.target.closest('#specsTrigger') && !e.target.closest('#specsMenu')) closeSpecsDrop();
 });
 
 // ── TOAST ──
