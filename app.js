@@ -102,14 +102,20 @@ function showSec(s) {
 
 // ── SPEC DROPDOWNS ──
 function fillSpecDropdowns() {
-  ['fSpec', 'srchSpec'].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const first = id === 'srchSpec'
-      ? '<option value="">جميع التخصصات</option>'
-      : '<option value="">-- اختر التخصص --</option>';
-    el.innerHTML = first + _specs.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
-  });
+  // Search filter dropdown (single select)
+  const srch = document.getElementById('srchSpec');
+  if (srch) {
+    srch.innerHTML = '<option value="">جميع التخصصات</option>' +
+      _specs.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+  }
+  // Form multi-picker
+  const picker = document.getElementById('specsPicker');
+  if (picker) {
+    const selected = [...picker.querySelectorAll('.spec-pick.sel')].map(el => el.dataset.s);
+    picker.innerHTML = _specs.map(s =>
+      `<span class="spec-pick${selected.includes(s.name) ? ' sel' : ''}" data-s="${s.name}" onclick="this.classList.toggle('sel')">${s.name}</span>`
+    ).join('');
+  }
 }
 
 // ── HOME ──
@@ -140,7 +146,7 @@ function filterSups() {
     (s.comp  || '').toLowerCase().includes(txt) ||
     (s.owner || '').toLowerCase().includes(txt) ||
     (s.phone || '').includes(txt));
-  if (spec) sups = sups.filter(s => s.spec === spec);
+  if (spec) sups = sups.filter(s => (s.specs || []).includes(spec));
   if (type === 'mat') sups = sups.filter(s => s.mat);
   else if (type === 'con') sups = sups.filter(s => s.con);
   else if (type) sups = sups.filter(s => (s.types || []).includes(type));
@@ -153,16 +159,17 @@ function filterSups() {
 }
 
 function supCard(s) {
-  const stars  = [1,2,3,4,5].map(i => `<span class="star${i<=(s.rating||0)?' on':''}">★</span>`).join('');
-  const types  = (s.types||[]).map(t => `<span class="tag tag-${t}">${t}</span>`).join('');
-  const extras = (s.mat ? '<span class="tag tag-mat">مورد مواد</span>' : '')
-               + (s.con ? '<span class="tag tag-con">منفذ</span>' : '');
-  const mapLnk = s.lat && s.lng
+  const stars   = [1,2,3,4,5].map(i => `<span class="star${i<=(s.rating||0)?' on':''}">★</span>`).join('');
+  const types   = (s.types||[]).map(t => `<span class="tag tag-${t}">${t}</span>`).join('');
+  const extras  = (s.mat ? '<span class="tag tag-mat">مورد مواد</span>' : '')
+                + (s.con ? '<span class="tag tag-con">منفذ</span>' : '');
+  const specTags = (s.specs||[]).map(sp => `<span class="spec-tag">${esc(sp)}</span>`).join('');
+  const mapLnk  = s.lat && s.lng
     ? `<div class="sc-row"><span>📍</span><a href="https://maps.google.com?q=${s.lat},${s.lng}" target="_blank" onclick="event.stopPropagation()">عرض على الخريطة</a></div>`
     : '';
   return `<div class="supplier-card" onclick="showDetail('${s.id}')">
     <div class="sc-header">
-      <div><div class="supplier-name">${esc(s.comp)}</div><span class="spec-tag">${esc(s.spec)}</span></div>
+      <div><div class="supplier-name">${esc(s.comp)}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${specTags}</div></div>
       <div class="stars">${stars}</div>
     </div>
     <div class="sc-body">
@@ -178,15 +185,16 @@ function showDetail(id) {
   const s = _sups.find(x => x.id === id);
   if (!s) return;
   document.getElementById('dtTitle').textContent = '🏢 ' + s.comp;
-  const stars  = [1,2,3,4,5].map(i => `<span class="star${i<=(s.rating||0)?' on':''}">★</span>`).join('');
-  const types  = (s.types||[]).map(t=>`<span class="tag tag-${t}">${t}</span>`).join('') || '<span style="color:var(--text3)">غير محدد</span>';
-  const mapLnk = s.lat && s.lng
+  const stars    = [1,2,3,4,5].map(i => `<span class="star${i<=(s.rating||0)?' on':''}">★</span>`).join('');
+  const types    = (s.types||[]).map(t=>`<span class="tag tag-${t}">${t}</span>`).join('') || '<span style="color:var(--text3)">غير محدد</span>';
+  const specTags = (s.specs||[]).map(sp=>`<span class="spec-tag">${esc(sp)}</span>`).join('') || '<span style="color:var(--text3)">غير محدد</span>';
+  const mapLnk   = s.lat && s.lng
     ? `<a href="https://maps.google.com?q=${s.lat},${s.lng}" target="_blank" style="color:var(--primary-light)">فتح في خرائط جوجل ↗</a>`
     : 'غير محدد';
   document.getElementById('dtBody').innerHTML = `
     <div class="detail-grid">
       <div class="d-item"><div class="d-label">اسم الشركة</div><div class="d-val">${esc(s.comp)}</div></div>
-      <div class="d-item"><div class="d-label">التخصص</div><div class="d-val"><span class="spec-tag">${esc(s.spec)}</span></div></div>
+      <div class="d-item d-full"><div class="d-label">التخصصات</div><div class="d-val" style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">${specTags}</div></div>
       <div class="d-item"><div class="d-label">اسم المالك</div><div class="d-val">${esc(s.owner)}</div></div>
       <div class="d-item"><div class="d-label">رقم الهاتف</div><div class="d-val"><a href="tel:${esc(s.phone)}" style="color:var(--primary-light)">${esc(s.phone)}</a></div></div>
       <div class="d-item"><div class="d-label">الموقع</div><div class="d-val">${mapLnk}</div></div>
@@ -213,8 +221,10 @@ function editSup(id) {
   document.getElementById('editId').value  = id;
   document.getElementById('fComp').value   = s.comp  || '';
   document.getElementById('fOwner').value  = s.owner || '';
-  document.getElementById('fSpec').value   = s.spec  || '';
   document.getElementById('fPhone').value  = s.phone || '';
+  // Restore multi-spec selection
+  document.querySelectorAll('.spec-pick').forEach(el =>
+    el.classList.toggle('sel', (s.specs||[]).includes(el.dataset.s)));
   document.getElementById('fLat').value    = s.lat   || '';
   document.getElementById('fLng').value    = s.lng   || '';
   document.getElementById('fNotes').value  = s.notes || '';
@@ -239,10 +249,10 @@ function editSup(id) {
 async function saveSup() {
   const comp  = document.getElementById('fComp').value.trim();
   const owner = document.getElementById('fOwner').value.trim();
-  const spec  = document.getElementById('fSpec').value;
   const phone = document.getElementById('fPhone').value.trim();
-  if (!comp || !owner || !spec || !phone) {
-    toast('يرجى تعبئة جميع الحقول المطلوبة (*)', 'err');
+  const specs = [...document.querySelectorAll('.spec-pick.sel')].map(el => el.dataset.s);
+  if (!comp || !owner || !phone || specs.length === 0) {
+    toast('يرجى تعبئة جميع الحقول المطلوبة واختيار تخصص واحد على الأقل', 'err');
     return;
   }
   const btn = document.getElementById('saveSupBtn');
@@ -250,7 +260,7 @@ async function saveSup() {
   btn.textContent = 'جاري الحفظ...';
   try {
     const data = {
-      comp, owner, spec, phone,
+      comp, owner, specs, phone,
       lat:   parseFloat(document.getElementById('fLat').value) || null,
       lng:   parseFloat(document.getElementById('fLng').value) || null,
       mat:   document.getElementById('vMat').value === '1',
@@ -339,7 +349,7 @@ function askDelUser(id) {
 // ── SPECIALTIES ──
 function renderSpecsTable() {
   document.getElementById('specsTbody').innerHTML = _specs.map((s, i) => {
-    const cnt = _sups.filter(x => x.spec === s.name).length;
+    const cnt = _sups.filter(x => (x.specs||[]).includes(s.name)).length;
     return `<tr>
       <td>${i+1}</td>
       <td>${esc(s.name)}</td>
@@ -446,7 +456,7 @@ function resetSupForm() {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
-  document.getElementById('fSpec').value = '';
+  document.querySelectorAll('.spec-pick').forEach(el => el.classList.remove('sel'));
   setCb('cbMat','vMat',false);
   setCb('cbCon','vCon',false);
   document.querySelectorAll('.type-opt').forEach(el => el.classList.remove('sel'));

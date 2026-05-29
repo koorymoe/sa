@@ -150,9 +150,11 @@
         <div class="form-group"><label>اسم الشركة *</label><input type="text" id="fComp" placeholder="اسم الشركة أو المؤسسة"></div>
         <div class="form-group"><label>اسم المالك *</label><input type="text" id="fOwner" placeholder="اسم صاحب الشركة"></div>
       </div>
-      <div class="form-row">
-        <div class="form-group"><label>التخصص *</label><select id="fSpec"><option value="">-- اختر التخصص --</option></select></div>
-        <div class="form-group"><label>رقم الهاتف *</label><input type="tel" id="fPhone" placeholder="07XX XXX XXXX" dir="ltr"></div>
+      <div class="form-group"><label>رقم الهاتف *</label><input type="tel" id="fPhone" placeholder="07XX XXX XXXX" dir="ltr"></div>
+
+      <div class="form-group">
+        <label>التخصصات * <span style="font-size:11px;color:var(--text3)">(يمكن اختيار أكثر من واحد)</span></label>
+        <div class="specs-picker" id="specsPicker"></div>
       </div>
 
       <div class="fdiv">📍 الموقع الجغرافي</div>

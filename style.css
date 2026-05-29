@@ -179,6 +179,12 @@ body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:linear-gradient(1
 .cb-field.yes .cb-box{background:rgba(16,185,129,0.18);border-color:var(--success);color:var(--success)}
 .cb-field.no .cb-box{background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.3);color:var(--danger)}
 
+/* ── SPECS PICKER ── */
+.specs-picker{display:flex;flex-wrap:wrap;gap:8px;background:var(--input);border:1px solid var(--border);border-radius:var(--rs);padding:12px}
+.spec-pick{padding:6px 14px;border:1.5px solid var(--border);border-radius:20px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;transition:all .18s;user-select:none;background:transparent}
+.spec-pick:hover{border-color:var(--primary);color:var(--text)}
+.spec-pick.sel{border-color:var(--primary);background:rgba(168,85,247,0.18);color:var(--primary-light)}
+
 /* ── TYPE SELECTOR ── */
 .type-sel{display:flex;gap:10px}
 .type-opt{flex:1;padding:12px;border:2px solid var(--border);border-radius:var(--rs);text-align:center;cursor:pointer;transition:all .18s;font-size:14px;font-weight:600;color:var(--text2);background:var(--input)}
